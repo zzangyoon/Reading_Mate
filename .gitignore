@@ -1,0 +1,12 @@
+# venv
+.venv
+
+# python
+__pycache__/
+
+# Environment
+.env
+
+# test_File
+backend/app/main copy.py
+backend/app/core/system copy.py

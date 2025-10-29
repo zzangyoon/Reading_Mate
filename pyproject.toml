@@ -1,0 +1,24 @@
+[project]
+name = "reading-mate"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.120.1",
+    "jupyter>=1.1.1",
+    "langchain==0.3.27",
+    "langchain-community>=0.3.31",
+    "langchain-openai>=0.3.35",
+    "langchain-tavily>=0.2.12",
+    "langgraph==0.6.10",
+    "openai>=2.6.0",
+    "pgvector>=0.4.1",
+    "psycopg2>=2.9.11",
+    "psycopg[binary]>=3.2.11",
+    "pymupdf>=1.26.5",
+    "pypdf>=6.1.2",
+    "streamlit>=1.50.0",
+    "uvicorn>=0.38.0",
+]
