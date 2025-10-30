@@ -26,7 +26,8 @@ MERGE_PROMPT = ChatPromptTemplate.from_messages([
         {user_question}
 
         ### 출력 형식
-        **최종 통합 답변**
+
+        <b>최종 통합 답변</b>
         [핵심 포인트 요약]
 
         **책에서의 맥락**
