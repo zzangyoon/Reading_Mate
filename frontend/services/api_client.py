@@ -7,6 +7,15 @@ from config import config
 
 from pydantic import BaseModel, Field
 
+# 고정 파라미터
+FIXED_PARAMS = {
+    "steps": 20,
+    "cfg_scale": 1.0,
+    "lora_strength": 0.8,
+    "width": 1024,
+    "height": 1024,
+}
+
 class RAGRequest(BaseModel):
     """RAG 질문 요청"""
     selected_passage: str = Field(..., description="사용자가 선택한 책 구절")
@@ -96,3 +105,30 @@ class APIClient:
             return response.json()
         except:
             return {"progress": 0, "current_page": 1}
+        
+    def make_img(
+        self,
+        selected_passage: str,
+        book_id: str
+    ) -> Dict:
+        req_payload = {
+            "user_input": selected_passage,
+            "book_id": book_id,
+            **FIXED_PARAMS
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}generate",
+                json=req_payload, 
+                timeout=1300
+            )
+            response.raise_for_status()
+            return {
+                "success": True,
+                "data": response.json()
+            }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }

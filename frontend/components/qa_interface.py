@@ -66,8 +66,40 @@ def render_qa_interface(api_client: APIClient):
     if visualize_button:
         if not selected_passage:
             st.warning("⚠️ 삽화로 만들 구절을 먼저 입력해주세요.")
+            return
+        
+        with st.spinner("🤔 AI가 답변을 생성하고 있습니다..."):
+            result = api_client.make_img(
+                selected_passage=clean_text(selected_passage) if selected_passage else "",
+                book_id="the_wizard_of_oz"
+            )
+
+        # 결과 표시
+        if result['success']:
+            data = result['data']
+            image_url = "http://127.0.0.1:8003" + data['image_url']
+
+            print("qa_interface data ::: ", data)
+            
+            st.markdown(f"""
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E0E0E0;">
+            
+            <h3 style="color: #2E5266; margin-bottom: 15px;">✨ 삽화 생성 완료</h3>
+            
+            <div style="
+                background-color: #F8F9FA;
+                padding: 20px;
+                border-radius: 10px;
+                border-left: 4px solid #2E5266;
+                text-align: center;
+                margin: 0;
+            ">
+                <img src="{image_url}" style="max-width: 100%; height: auto; border-radius: 8px;">
+            </div>
+            """, unsafe_allow_html=True)
+        
         else:
-            st.info("🚧 삽화 생성 기능은 준비 중입니다. 곧 사용하실 수 있습니다!")
+            st.error(f"오류가 발생했습니다")
 
     if mark_button:
         if not selected_passage:
