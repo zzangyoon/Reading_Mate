@@ -58,27 +58,32 @@ class APIClient:
         except:
             return False
         
-    def save_progress(
+    def save_reading_position(
         self,
         book_id: int,
-        progress: float,
-        current_page: int
+        selected_passage: str,
+        user_id: str = "default_user"
     ) -> Dict:
-        """독서 진행도 저장"""
+        """읽은 위치 저장"""
         try:
             response = requests.post(
-                f"{self.base_url}/progress/save",
+                f"{self.base_url}/progress/save-position",
                 json={
                     "book_id": book_id,
-                    "progress": progress,
-                    "current_page": current_page
+                    "user_id": user_id,
+                    "selected_passage": selected_passage
                 },
                 timeout=5
             )
             response.raise_for_status()
-            return {"success": True}
+            return response.json()
         except:
             return {"success": False}
+        
+    def get_summary(self, book_id: int) -> Dict:
+        """지금까지 줄거리 조회"""
+        
+        return {"success" : True}
 
     def get_progress(self, book_id: int) -> Dict:
         """독서 진행도 조회"""

@@ -49,29 +49,53 @@ def render_qa_interface(api_client: APIClient):
     )
     
     # 버튼
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
     
     with col_btn1:
         ask_button = st.button("🔍 Ask", type="primary", use_container_width=True)
     
     with col_btn2:
         visualize_button = st.button("🎨 삽화로 보기", use_container_width=True)
-    
+
     with col_btn3:
-        clear_button = st.button("🗑️ Clear", use_container_width=True)
+        mark_button  = st.button("📍 여기까지 읽음", use_container_width=True)
     
-    if clear_button:
-        st.session_state['selected_passage'] = ""
-        st.session_state['user_question'] = ""
-        if 'extracted_text' in st.session_state:
-            del st.session_state['extracted_text']
-        st.rerun()
+    with col_btn4:
+        summary_button = st.button("📝 지금까지 요약", use_container_width=True)
     
     if visualize_button:
         if not selected_passage:
             st.warning("⚠️ 삽화로 만들 구절을 먼저 입력해주세요.")
         else:
             st.info("🚧 삽화 생성 기능은 준비 중입니다. 곧 사용하실 수 있습니다!")
+
+    if mark_button:
+        if not selected_passage:
+            st.warning("구절을 선택해주세요")
+        else:
+            with st.spinner("💾 저장 중..."):
+                result = api_client.save_reading_position(
+                    book_id=1,  # 실제로는 세션에서 가져오기
+                    selected_passage=clean_text(selected_passage)
+                )
+        
+            if result['success']:
+                chunk_index = result.get('chunk_index', 0)
+                st.success(f"✅ {chunk_index}번 청크까지 읽음 표시 완료!")
+            else:
+                st.error("저장 실패")
+
+    if summary_button:
+        with st.spinner("📚 지금까지 읽은 내용을 요약하는 중..."):
+            result = api_client.get_summary(book_id=1)  # 실제로는 세션에서 가져오기
+        
+        if result['success']:
+            st.markdown("---")
+            st.markdown("### 📖 지금까지의 줄거리")
+            st.markdown(result['summary'])
+            st.caption(f"📍 {result['chunk_index']}번 청크까지 요약")
+        else:
+            st.error("요약 실패")
     
     st.markdown("</div>", unsafe_allow_html=True)
     
