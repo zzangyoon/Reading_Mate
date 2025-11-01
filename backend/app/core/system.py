@@ -74,11 +74,11 @@ class ReadingAssistantSystem:
         # LangGraph 생성
         self.graph = self._create_graph()
     
-    def _planner_node(self, state: GraphState) -> GraphState:
+    async def _planner_node(self, state: GraphState) -> GraphState:
         """Planner 노드"""
         print("\n=== PLANNER NODE ===")
         print(f"state ::: {state}")
-        plan = self.planner.analyze(
+        plan = await self.planner.analyze(
             state["selected_passage"],
             state["user_question"]
         )
@@ -86,7 +86,7 @@ class ReadingAssistantSystem:
         state["plan"] = plan
 
         # 하이브리드 검색
-        hybrid_result = self.vector_store_manager.hybrid_search(
+        hybrid_result = await self.vector_store_manager.hybrid_search(
             state["selected_passage"],
             state["user_question"],
             state.get("k", 5)
@@ -96,15 +96,10 @@ class ReadingAssistantSystem:
         state["book_author"] = hybrid_result["book_author"]
         state["rag_context"] = hybrid_result["text"]
 
-
-
-
-
-
         print(f"return state ::: {state}")
         return state
     
-    def _rag_node(self, state: GraphState) -> GraphState:
+    async def _rag_node(self, state: GraphState) -> GraphState:
         """RAG 노드"""
         print("\n=== RAG NODE ===")
         print(f"state ::: {state}")
@@ -131,7 +126,7 @@ class ReadingAssistantSystem:
         print(f"책 정보: {state['book_title']} - {state['book_author']}")
         
         # RAG 답변 생성
-        result = self.rag_engine.generate_answer(
+        result = await self.rag_engine.generate_answer(
             state["selected_passage"],
             state["user_question"],
             state["rag_context"],
@@ -145,7 +140,7 @@ class ReadingAssistantSystem:
         
         return state
     
-    def _web_search_node(self, state: GraphState) -> GraphState:
+    async def _web_search_node(self, state: GraphState) -> GraphState:
         """Web Search 노드"""
         print("\n=== WEB SEARCH NODE ===")
         print(f"state ::: {state}")
@@ -160,7 +155,7 @@ class ReadingAssistantSystem:
 
         print(f"사용할 책 정보: {book_title} - {book_author}")
         
-        result = self.web_search_engine.search(
+        result = await self.web_search_engine.search(
             state["selected_passage"],
             state["user_question"],
             # state.get("book_title", "Unknown"),
@@ -174,12 +169,12 @@ class ReadingAssistantSystem:
         
         return state
     
-    def _evaluate_node(self, state: GraphState) -> GraphState:
+    async def _evaluate_node(self, state: GraphState) -> GraphState:
         """RAG 평가 노드"""
         print("\n=== RAG EVALUATION NODE ===")
         print(f"state ::: {state}")
         
-        score = self.rag_evaluator.evaluate(
+        score = await self.rag_evaluator.evaluate(
             state["user_question"],
             state.get("rag_context", ""),
             state.get("rag_result", "")
@@ -190,12 +185,12 @@ class ReadingAssistantSystem:
         
         return state
     
-    def _merge_node(self, state: GraphState) -> GraphState:
+    async def _merge_node(self, state: GraphState) -> GraphState:
         """문서 통합 노드"""
         print("\n=== DOC GRADER NODE (MERGE) ===")
         print(f"state ::: {state}")
         
-        final_answer = self.document_merger.merge(
+        final_answer = await self.document_merger.merge(
             state.get("rag_result", ""),
             state.get("web_result", ""),
             state["user_question"]
@@ -265,7 +260,7 @@ class ReadingAssistantSystem:
         
         return workflow.compile()
     
-    def ask(
+    async def ask(
         self,
         selected_passage: str,
         user_question: str,
@@ -284,5 +279,13 @@ class ReadingAssistantSystem:
 
         print(f"selected_passage::: {selected_passage}, user_question ::: {user_question}")
         
-        result = self.graph.invoke(initial_state)
+        result = await self.graph.ainvoke(initial_state)
         return result["final_answer"]
+    
+_assistant_system = None
+
+def get_assistant_system():
+    global _assistant_system
+    if _assistant_system is None:
+        _assistant_system = ReadingAssistantSystem()
+    return _assistant_system

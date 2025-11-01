@@ -44,7 +44,7 @@ class APIClient:
     
         try:
             response = requests.post(
-                f"{self.base_url}ask",
+                f"{self.base_url}rag/ask",
                 json=req_json,
                 timeout=60
             )

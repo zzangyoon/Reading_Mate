@@ -10,7 +10,7 @@ class WebSearchEngine:
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.tools = [TavilySearch()]
     
-    def search(
+    async def search(
         self,
         selected_passage: str,
         user_question: str,
@@ -31,7 +31,7 @@ class WebSearchEngine:
             verbose=True
         )
         
-        result = executor.invoke({
+        result = await executor.ainvoke({
             "selected_passage": selected_passage,
             "user_question": user_question,
             "book_title": book_title,

@@ -18,7 +18,7 @@ class RAGEngine:
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.chain = RAG_PROMPT | self.llm | StrOutputParser()
     
-    def generate_answer(
+    async def generate_answer(
         self,
         selected_passage: str,
         user_question: str,
@@ -27,7 +27,7 @@ class RAGEngine:
         book_author: str
     ) -> str:
         """RAG 답변 생성"""
-        return self.chain.invoke({
+        return await self.chain.ainvoke({
             "context": context,
             "book_title": book_title,
             "book_author": book_author,
