@@ -1,7 +1,7 @@
 # 전자책 AI 이미지 생성 서비스 설정
 
 # ComfyUI 서버 주소
-comfyui_server: "127.0.0.1:8188"
+comfyui_server: "100.100.53.32:8288"
 
 # 벡터 데이터베이스 설정
 vector_db:

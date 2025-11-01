@@ -1,8 +1,8 @@
 """
-AI 프롬프트 생성기
-- 캐릭터 외형 자동 추출
-- 한영 키워드 번역
-- 가중치 적용 프롬프트 구조화
+AI 프롬프트 생성기 (최종 개선 버전)
+- 개선된 문장/키워드 판단 로직
+- 모델 통일 (gpt-4o-mini)
+- 가중치 로직 유지
 """
 from typing import Dict, List
 from openai import OpenAI
@@ -18,25 +18,61 @@ class PromptGenerator:
     def __init__(self):
         """OpenAI API 클라이언트 초기화"""
         self.client = OpenAI()
-        self.model = "gpt-4o-mini"
-        self.translation_model = "gpt-4o"
+        self.model = "gpt-4o-mini"  # 모든 작업에 통일
     
     def _is_sentence_input(self, user_input: str) -> bool:
-        """입력이 문장인지 키워드 나열인지 판단"""
-        # 쉼표가 있으면 키워드
-        if ',' in user_input:
-            return False
+        """
+        입력이 문장인지 키워드 나열인지 판단 (개선 버전)
         
-        # 한국어 문법 요소가 있으면 문장
-        korean_grammar = r'[은는이가을를에와과](?:\s|$)|[다고하](?:\s|$)'
-        if re.search(korean_grammar, user_input):
+        문장 특징:
+        - 조사(은/는/이/가/을/를/에/의/와/과/도/만...)
+        - 어미(~다/~요/~네/~군/~ㄴ다/~습니다...)
+        - 동사/형용사 활용
+        
+        키워드 특징:
+        - 명사만 나열
+        - 쉼표나 공백으로만 구분
+        - 조사 없음
+        """
+        text = user_input.strip()
+        
+        # 1. 쉼표 처리 개선
+        if ',' in text:
+            parts = [p.strip() for p in text.split(',')]
+            # 모든 파트가 3단어 이하의 짧은 명사구면 키워드 검사
+            if all(len(p.split()) <= 3 for p in parts):
+                # 조사가 하나라도 있으면 문장
+                particle_pattern = r'[은는이가을를에의와과도만부터까지로써](?:\s|,|$)'
+                if not re.search(particle_pattern, text):
+                    return False
+        
+        # 2. 한국어 조사 검사 (강화)
+        particle_pattern = r'[은는이가을를에게서의와과도만부터까지한테보다처럼마다조차밖에커녕](?:\s|,|$)'
+        if re.search(particle_pattern, text):
             return True
         
-        # 3단어 이하면 키워드
-        if len(user_input.split()) <= 3:
+        # 3. 용언 어미 검사
+        verb_ending_pattern = r'(다|요|네|군|습니다|ㅂ니다|었다|였다|ㄴ다|는다)(?:\s|,|\.|$)'
+        connective_pattern = r'(고|며|지만|어서|아서|니까|면서|도록|듯이|ㄴ지)(?:\s|,|$)'
+        
+        if re.search(verb_ending_pattern, text) or re.search(connective_pattern, text):
+            return True
+        
+        # 4. 서술격 조사
+        copula_pattern = r'(이다|입니다|이에요|예요|이네요|네요)(?:\s|,|\.|$)'
+        if re.search(copula_pattern, text):
+            return True
+        
+        # 5. 단어 수 기반 판단
+        words = text.split()
+        
+        if len(words) >= 5:
+            return True
+        
+        if len(words) <= 2:
             return False
         
-        return True
+        return False
     
     def _search_keyword_translation(
         self, 
@@ -46,14 +82,6 @@ class PromptGenerator:
     ) -> Dict:
         """
         단일 키워드의 정확한 영문 표기 검색
-        
-        Args:
-            keyword: 한글 키워드
-            context: 책 내용 컨텍스트
-            book_context: 책 제목/힌트
-            
-        Returns:
-            번역 결과 딕셔너리
         """
         context_text = "\n".join([c['text'] for c in context[:5]])
         
@@ -78,7 +106,7 @@ class PromptGenerator:
 4. 유명 작품의 경우 공식 영문명 사용
 
 **중요:**
-- 캐릭터 이름은 절대 임의 번역 금지 (예: 도로시 → Dorothy, NOT Dorosi)
+- 캐릭터 이름은 절대 임의 번역 금지
 - 유명 작품의 경우 원작 영문명 사용 필수
 
 JSON 형식:
@@ -90,13 +118,13 @@ JSON 형식:
     "reasoning": "오즈의 마법사 주인공, 공식 영문명 Dorothy Gale"
 }}
 
-type 값: "character" (인물), "place" (장소), "object" (물건), "general" (일반명사)
-confidence: 0.0~1.0 (확신도)
+type 값: "character", "place", "object", "general"
+confidence: 0.0~1.0
 """
 
         try:
             response = self.client.chat.completions.create(
-                model=self.translation_model,
+                model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 response_format={"type": "json_object"}
@@ -169,24 +197,74 @@ confidence: 0.0~1.0 (확신도)
         else:
             return keywords
     
-    def _detect_main_characters(self, user_input: str, context: List[Dict]) -> List[str]:
-        """사용자 입력과 context에서 주요 캐릭터 감지"""
+    def _translate_sentence_to_english(
+        self,
+        sentence: str,
+        context: List[Dict],
+        book_context: str = ""
+    ) -> str:
+        """한글 문장을 영문으로 번역"""
         context_text = "\n".join([c['text'] for c in context[:3]])
         
-        prompt = f"""다음 텍스트에서 등장하는 캐릭터 이름을 모두 찾아주세요.
+        prompt = f"""다음 한글 장면 묘사를 영어로 번역하세요.
+
+<한글_장면>
+{sentence}
+</한글_장면>
+
+<책_내용_참고>
+{context_text}
+</책_내용_참고>
+
+<책_정보>
+{book_context if book_context else "정보 없음"}
+</책_정보>
+
+**번역 규칙:**
+1. 고유명사(인명, 지명)는 참고 자료의 영문명 사용
+2. 장면의 시각적 요소에 집중
+3. 자연스러운 영어 표현 사용
+4. 간결하고 명확하게
+
+JSON 형식:
+{{
+    "english_scene": "영문 번역",
+    "key_subjects": ["주요 대상1", "주요 대상2"]
+}}
+"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            return result.get("english_scene", sentence)
+            
+        except Exception as e:
+            return sentence
+    
+    def _detect_main_characters(self, user_input: str, context: List[Dict]) -> List[str]:
+        """사용자 입력에서만 주요 캐릭터 감지 (context는 참고용)"""
+        
+        prompt = f"""다음 사용자 입력 문장에서 **등장하는** 캐릭터 이름만 찾아주세요.
 
 <사용자_입력>
 {user_input}
 </사용자_입력>
 
-<책_내용>
-{context_text}
-</책_내용>
-
 **규칙:**
-- 사람/동물/생명체 이름만 추출 (장소명 제외)
-- 고유명사만 (일반명사 제외)
+- **사용자 입력 문장에 직접 언급된 캐릭터만** 추출
+- 사람/동물/생명체 이름만 (장소명, 일반명사 제외)
+- 고유명사만
 - 한국어 이름 그대로 반환
+
+**중요:**
+- 입력 문장에 없는 캐릭터는 절대 추출 금지
+- "사람들", "악사" 같은 일반명사 제외
 
 JSON 형식:
 {{
@@ -228,7 +306,7 @@ JSON 형식:
 - 옷차림 (색상, 스타일, 특징)
 - 키/체형
 - 얼굴 특징
-- 특별한 외형적 특징 (모자, 안경, 액세서리 등)
+- 특별한 외형적 특징
 
 **제외 대상:**
 - 성격, 행동, 감정
@@ -238,23 +316,18 @@ JSON 형식:
 **중요:**
 - 텍스트에 명시된 정보만 사용
 - 추측하지 말 것
-- 영어로 간결하게 나열 (쉼표로 구분)
+- 영어로 간결하게 나열
 
 JSON 형식:
 {{
     "appearance": "young girl, braided brown hair with blue ribbons, bright blue gingham dress, ruby slippers",
-    "age_group": "child" 또는 "teen" 또는 "adult" 또는 "elderly",
-    "gender": "male" 또는 "female" 또는 "unknown",
+    "age_group": "child",
+    "gender": "female",
     "confidence": 0.8
 }}
 
-만약 외형 정보가 없으면:
-{{
-    "appearance": "",
-    "age_group": "unknown",
-    "gender": "unknown",
-    "confidence": 0.0
-}}
+age_group: "child", "teen", "adult", "elderly", "unknown"
+gender: "male", "female", "unknown"
 """
 
         try:
@@ -286,10 +359,7 @@ JSON 형식:
         main_character: str,
         context: List[Dict]
     ) -> List[str]:
-        """
-        단독 이미지 생성 시 배제해야 할 주체 식별
-        (다른 캐릭터, 적대자, 부정적 배경)
-        """
+        """단독 이미지 생성 시 배제해야 할 주체 식별"""
         context_text = "\n".join([c['text'] for c in context[:5]])
         
         prompt = f"""다음 텍스트에서 '{main_character}'의 단독 이미지 생성 시 배제해야 할 요소를 식별하세요.
@@ -300,7 +370,7 @@ JSON 형식:
 
 **식별 대상:**
 1. '{main_character}'의 주요 적대자나 위협 요소
-2. '{main_character}'의 단독 이미지를 만들 때 등장하면 안 되는 다른 캐릭터 (동료 포함)
+2. 단독 이미지를 만들 때 등장하면 안 되는 다른 캐릭터
 3. 부정적이거나 무서운 분위기를 만드는 존재
 
 JSON 형식:
@@ -335,50 +405,50 @@ JSON 형식:
     ) -> Dict:
         """
         ComfyUI용 구조화된 프롬프트 생성
-        
-        Args:
-            context: 벡터 검색 결과
-            user_input: 사용자 입력
-            style_preference: 스타일 선호도
-            book_context: 책 컨텍스트
-            
-        Returns:
-            프롬프트 딕셔너리 (positive, style_params, _debug)
         """
-        # 입력 타입 판단
+        # 입력 타입 판단 (개선된 로직)
         is_sentence = self._is_sentence_input(user_input)
         
-        # 키워드 영문 번역 (키워드 모드일 때만)
+        # 키워드 영문 번역
         keyword_translations = {}
+        scene_description_eng = ""
+        
         if not is_sentence:
+            # 키워드 모드
             keyword_translations = self._search_and_translate_keywords(
                 user_input, 
                 context,
                 book_context
             )
-        
-        # 키워드 입력인 경우 책 내용에서 문장 추출
-        if not is_sentence:
             scene_description = self._extract_scene_from_keywords(user_input, context)
+            scene_description_eng = self._translate_sentence_to_english(
+                scene_description, 
+                context, 
+                book_context
+            )
             input_type = "키워드"
         else:
+            # 문장 모드
             scene_description = user_input
+            scene_description_eng = self._translate_sentence_to_english(
+                user_input, 
+                context, 
+                book_context
+            )
             input_type = "문장"
         
-        # 캐릭터 감지
+        # 캐릭터 감지 및 외형 추출
         characters = self._detect_main_characters(user_input, context)
         
-        # 각 캐릭터의 외형 정보 추출
         character_appearances = {}
         for char in characters:
             appearance_data = self._extract_character_appearance(char, context)
             if appearance_data["confidence"] > 0.5:
                 character_appearances[char] = appearance_data
         
-        # 주요 캐릭터 결정
+        # 주요 캐릭터 및 방해 요소
         main_character = characters[0] if characters else None
         
-        # 방해 요소 식별 (단독 이미지인 경우)
         interfering_subjects = []
         is_solo_request = len(characters) == 1 or "혼자" in user_input.lower() or "단독" in user_input.lower()
         
@@ -403,7 +473,7 @@ JSON 형식:
             for i, c in enumerate(context[:3])
         ])
         
-        # 캐릭터 외형 정보 텍스트
+        # 캐릭터 외형 정보
         character_info_text = ""
         if character_appearances:
             character_info_text = "\n\n<캐릭터_외형_정보>\n"
@@ -428,7 +498,7 @@ JSON 형식:
         if interfering_subjects:
             weakening_text = " (" + ", ".join([f"({s}:-1.0)" for s in set(interfering_subjects)]) + ")"
         
-        # 프롬프트 생성
+        # 프롬프트 생성 (가중치 로직 유지!)
         prompt_template = f"""당신은 전자책 독서 경험을 향상시키도록 돕는 이미지 생성 삽화 전문가입니다.
 
 <책_내용_참고>
@@ -437,9 +507,13 @@ JSON 형식:
 {character_info_text}
 {translation_info_text}
 
-<사용자_입력>
-{scene_description}
-</사용자_입력>
+<영문_장면_묘사>
+{scene_description_eng}
+</영문_장면_묘사>
+
+<원본_입력>
+{user_input}
+</원본_입력>
 
 <스타일>
 {style_preference}
@@ -456,14 +530,15 @@ JSON 형식:
      * teen: "(((teenager:1.8))), (((adolescent:1.7)))"
      * child: "(((child:1.9))), (((young:1.8))), kid"
 
-2. **Positive 약화 전략 (Negative 대체):**
-   - 단독 이미지 시 다른 캐릭터/위협 요소를 {weakening_text} 형태로 프롬프트 맨 끝에 배치
+2. **장면 번역 사용:**
+   - <영문_장면_묘사>를 기반으로 프롬프트 작성
+   - <원본_입력>은 참고만
 
-3. **장면 및 스타일 충실 변환:**
-   - <사용자_입력>과 <스타일>을 충실하게 반영하여 영문 프롬프트 작성
+3. **Positive 약화 전략:**
+   - 단독 이미지 시 다른 캐릭터/위협 요소를 {weakening_text} 형태로 맨 끝에 배치
 
 4. **구도 명시:**
-   - "medium shot", "upper body shot", "cowboy shot" 중 하나 반드시 명시
+   - "medium shot", "upper body shot", "cowboy shot", "full body shot" 중 하나
 
 5. **단독 이미지 처리:**
    - 단독 이미지 요청 시 "single character focus, solo character" 추가
@@ -480,12 +555,9 @@ JSON 형식:
 6. 단독 이미지 키워드 (해당시)
 7. 구도
 8. 품질 키워드
-9. Positive 약화 키워드 ((요소:-1.0) 형태, 맨 끝)
+9. Positive 약화 키워드 (맨 끝)
 
-**예시:**
-"(((child:1.9))), (((young girl:1.8))), (((female:1.7))), (((The canonical character Dorothy Gale:2.0))), ((cheerful girl:1.6)), ((braided brown hair with blue ribbons:1.5)), ((bright blue gingham dress:1.4)), ruby slippers, walking happily in a bright green field, full body shot, masterpiece, best quality (scarecrow:-1.0), (tin man:-1.0)"
-
-다음 JSON 형식으로 반환:
+JSON 형식:
 {{
     "positive": "영어 프롬프트",
     "style_params": {{
@@ -498,7 +570,7 @@ JSON 형식:
 
         try:
             response = self.client.chat.completions.create(
-                model=self.translation_model,
+                model=self.model,
                 messages=[{"role": "user", "content": prompt_template}],
                 temperature=0.7,
                 response_format={"type": "json_object"}
@@ -517,7 +589,7 @@ JSON 형식:
                 "_error": str(e)
             }
         
-        # Flux 최적 기본값 설정
+        # Flux 최적 기본값
         result.setdefault("style_params", {})
         result["style_params"].setdefault("cfg_scale", 1.0)
         result["style_params"].setdefault("steps", 20)
@@ -527,7 +599,8 @@ JSON 형식:
         result["_debug"] = {
             "input_type": input_type,
             "original_input": user_input,
-            "scene_used": scene_description,
+            "scene_used_korean": scene_description if not is_sentence else user_input,
+            "scene_used_english": scene_description_eng,
             "detected_characters": characters,
             "character_appearances": character_appearances,
             "main_character": main_character,
@@ -537,4 +610,3 @@ JSON 형식:
         }
         
         return result
-    

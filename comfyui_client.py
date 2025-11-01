@@ -1,8 +1,11 @@
 """
 ComfyUI API 클라이언트
 - Flux 모델 전용 이미지 생성
-- Storybook LoRA 적용
+- Storybook LoRA 적용 
 """
+# uv run comfy launch
+# uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8003
+
 import requests
 import json
 import time
@@ -13,7 +16,7 @@ from pathlib import Path
 
 
 class ComfyUIClient:
-    def __init__(self, server_address: str = "127.0.0.1:8188"):
+    def __init__(self, server_address: str = "100.100.53.32:8288"):
         """
         ComfyUI 클라이언트 초기화
         
