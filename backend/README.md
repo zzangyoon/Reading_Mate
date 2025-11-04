@@ -47,7 +47,9 @@ backend/
 uv pip install -r requirements.txt
 
 # 환경 변수 설정
-cp .env.example .env
+copy .env.example .env  # (Windows)
+cp .env.example .env    # (Linux / macOS)
+
 # .env 파일 수정
 ```
 
