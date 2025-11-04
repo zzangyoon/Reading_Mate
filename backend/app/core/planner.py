@@ -12,9 +12,9 @@ class Planner:
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.chain = PLANNER_PROMPT | self.llm | StrOutputParser()
     
-    def analyze(self, selected_passage: str, user_question: str) -> dict:
+    async def analyze(self, selected_passage: str, user_question: str) -> dict:
         """질문 분석"""
-        plan_str = self.chain.invoke({
+        plan_str = await self.chain.ainvoke({
             "selected_passage": selected_passage,
             "user_question": user_question
         })

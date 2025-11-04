@@ -6,53 +6,28 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 load_dotenv()
 
-from backend.app.core.system import ReadingAssistantSystem
+from backend.app.core.system import get_assistant_system
 from backend.app.models.request import RAGRequest
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
 from fastapi.responses import FileResponse
+from backend.app.api.router import api_router
 import yaml
 
 from vector_search import VectorSearchEngine
 from prompt_generator import PromptGenerator
 from comfyui_client import ComfyUIClient
 
-# ===== 요청/응답 모델 =====
-class GenerationRequest(BaseModel):
-    """이미지 생성 요청"""
-    user_input: str
-    book_id: str = "the_wizard_of_oz"
-    steps: Optional[int] = 20
-    cfg_scale: Optional[float] = 1.0
-    width: Optional[int] = 1024
-    height: Optional[int] = 1024
-    lora_strength: Optional[float] = 0.8
-
-app = FastAPI(
-    title="Reading Assistant API",
-    description="독서 도우미 RAG 시스템 API",
-    version="1.0.0"
-)
-
-@app.get("/connection_check")
-async def connection_check():
-    return {"status" : "200", "answer" : "ok"}
-
-@app.post("/ask")
-async def ask(req: RAGRequest):
-    print("ask START !!!")
-    assistant = ReadingAssistantSystem()
-    answer = assistant.ask(req.selected_passage, req.user_question, req.k)
-    print("answer end !!!")
-    print(answer)
-    return {"status" : "ok", "answer" : answer}
+from contextlib import asynccontextmanager
 
 services = {}
 sessions = {}
-@app.on_event("startup")
-async def startup_event():
-    """서비스 초기화"""
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작 시
+    print("앱 시작: DB 연결 준비")
     print("서비스 시작 중...")
     
     # 설정 파일 로드
@@ -73,6 +48,36 @@ async def startup_event():
     )
     
     print("서비스 초기화 완료!")
+    yield
+    # 종료 시
+    print("앱 종료: DB 연결 해제")
+    assistant_system = get_assistant_system()
+    await assistant_system.db_manager.close()
+
+
+# ===== 요청/응답 모델 =====
+class GenerationRequest(BaseModel):
+    """이미지 생성 요청"""
+    user_input: str
+    book_id: str = "the_wizard_of_oz"
+    steps: Optional[int] = 20
+    cfg_scale: Optional[float] = 1.0
+    width: Optional[int] = 1024
+    height: Optional[int] = 1024
+    lora_strength: Optional[float] = 0.8
+
+app = FastAPI(
+    title="Reading Assistant API",
+    description="독서 도우미 RAG 시스템 API",
+    version="1.0.0",
+    lifespan = lifespan
+)
+
+app.include_router(api_router)
+
+@app.get("/connection_check")
+async def connection_check():
+    return {"status" : "200", "answer" : "ok"}
 
 @app.post("/generate")
 async def generate_image(request: GenerationRequest):
@@ -140,9 +145,9 @@ async def get_image(filename: str):
     
     return FileResponse(image_path)
 
-@app.get("/test")
-async def test():
-    assistant = ReadingAssistantSystem()
-    answer = assistant.ask("그 집을 사이클론의 한가운데로 끌어올렸다", "여기서 사이클론이 의미하는게 뭐야?")
-    print(answer)
-    return {"status" : "ok", "answer" : answer}
+# @app.get("/test")
+# async def test():
+#     assistant = ReadingAssistantSystem()
+#     answer = assistant.ask("그 집을 사이클론의 한가운데로 끌어올렸다", "여기서 사이클론이 의미하는게 뭐야?")
+#     print(answer)
+#     return {"status" : "ok", "answer" : answer}

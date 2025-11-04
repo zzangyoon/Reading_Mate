@@ -10,9 +10,9 @@ class RAGEvaluator:
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.chain = EVALUATOR_PROMPT | self.llm | StrOutputParser()
     
-    def evaluate(self, question: str, context: str, answer: str) -> float:
+    async def evaluate(self, question: str, context: str, answer: str) -> float:
         """RAG 결과 평가 (0-1 스케일)"""
-        eval_str = self.chain.invoke({
+        eval_str = await self.chain.ainvoke({
             "question": question,
             "context": context,
             "answer": answer

@@ -11,9 +11,9 @@ class DocumentMerger:
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.chain = MERGE_PROMPT | self.llm | StrOutputParser()
     
-    def merge(self, rag_result: str, web_result: str, user_question: str) -> str:
+    async def merge(self, rag_result: str, web_result: str, user_question: str) -> str:
         """결과 통합"""
-        return self.chain.invoke({
+        return await self.chain.ainvoke({
             "rag_result": rag_result,
             "web_result": web_result,
             "user_question": user_question

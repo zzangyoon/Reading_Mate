@@ -2,6 +2,10 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import PGVector
 from backend.app.core.database import DatabaseManager
 from backend.app.config import settings
+import asyncio
+from typing import List
+from langchain.schema import Document
+
 
 class VectorStoreManager:
     """PGVector 연결 및 검색 관리"""
@@ -24,7 +28,7 @@ class VectorStoreManager:
             connection_string=self.db_manager.connection_string
         )
     
-    def hybrid_search(
+    async def hybrid_search(
         self,
         selected_passage: str,
         user_question: str,
@@ -33,25 +37,32 @@ class VectorStoreManager:
         """하이브리드 검색 (구절 + 질문)"""
         selected_passage = selected_passage.strip()
         user_question = user_question.strip()
-        
+
         if not selected_passage and not user_question:
             raise ValueError("검색할 구절 또는 질문이 필요합니다.")
-        
-        # 구절로 검색
-        passage_docs = []
+
+        print("hybrid_search ::: ")
+
+        tasks = []
         if selected_passage:
-            passage_docs = self.vector_store.similarity_search(selected_passage, k=k)
+            tasks.append(self.vector_store.asimilarity_search(selected_passage, k=k))
         
-        # 질문으로 검색
-        question_docs = []
         if user_question:
-            question_docs = self.vector_store.similarity_search(user_question, k=k)
+            tasks.append(self.vector_store.asimilarity_search(user_question, k=k))
         
+        # asyncio.gather: 여러 비동기 작업을 병렬로 실행
+        results: List[List[Document]] = await asyncio.gather(*tasks)
+
+        # 결과 합치기
+        all_docs = []
+        for doc_list in results:
+            all_docs.extend(doc_list)
+
         # 중복 제거
         seen_contents = set()
         unique_docs = []
         
-        for doc in passage_docs + question_docs:
+        for doc in all_docs:
             if doc.page_content not in seen_contents:
                 seen_contents.add(doc.page_content)
                 unique_docs.append(doc)
@@ -67,7 +78,7 @@ class VectorStoreManager:
         
         # 책 메타데이터 조회
         book_id = selected_docs[0].metadata["book_id"]
-        metadatas = self.db_manager.get_book_metadata(book_id)
+        metadatas = await self.db_manager.get_book_metadata(book_id)
         
         # 포맷팅
         formatted = []
