@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 전자책 AI 이미지 생성기</title>
+    
+    <!-- PDF.js 라이브러리 (PDF 지원용) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- 스타일 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header>
+        <h1>Reading Mate</h1>
+        <p>AI를 활용한 전자책</p>
+    </header>
+
+    <!-- 메인 컨테이너 -->
+    <div class="container two-column">
+        <!-- 왼쪽: 책 뷰어 -->
+        <div class="book-section">
+            <!-- 파일 선택 -->
+            <div class="file-controls">
+                <button id="load-txt-btn" class="file-btn">📄 TXT 파일 열기</button>
+                <button id="load-pdf-btn" class="file-btn">📕 PDF 파일 열기</button>
+                <!-- ### -->
+                <button id="load-book-btn" class="file-btn">📕 책 보기</button>
+                <input type="file" id="file-input" accept=".txt,.pdf" style="display: none;">
+            </div>
+            
+            <!-- 책 제목 표시 -->
+            <div id="book-title" class="book-title">
+                파일을 열어주세요
+            </div>
+            
+            <!-- 네비게이션 -->
+            <div class="book-controls">
+                <button id="prev-btn" disabled>← 이전</button>
+                <span id="page-info">- / -</span>
+                <button id="next-btn" disabled>다음 →</button>
+                <input type="range" id="page-slider" min="1" max="1" value="1" disabled>
+            </div>
+            
+            <!-- 책 내용 표시 영역 -->
+            <div id="book-viewer"></div>
+            
+            <!-- 텍스트 선택 팝업 메뉴 -->
+            <div id="selection-menu" class="selection-popup">
+                <button id="create-image-btn" class="menu-btn">
+                    🎨 이미지 만들기
+                </button>
+                <button id="copy-text-btn" class="menu-btn">
+                    📋 복사
+                </button>
+            </div>
+            
+            <!-- 선택된 텍스트 표시 -->
+            <div id="selected-text-display">
+                <h3>선택된 텍스트</h3>
+                <p id="selected-text">텍스트를 드래그하여 선택하세요</p>
+            </div>
+        </div>
+
+        <!-- 오른쪽: 이미지 생성 영역 -->
+        <!-- <div class="generation-section">
+            <h2>🎨 AI 이미지 생성</h2>
+            
+            
+            <div class="quick-examples">
+                <button class="example-btn" data-text="도로시가 토토와 함께 노란 벽돌길을 걷는다">
+                    예시 1
+                </button>
+                <button class="example-btn" data-text="허수아비가 뇌를 갖고 싶어한다">
+                    예시 2
+                </button>
+                <button class="example-btn" data-text="양철 나무꾼이 심장을 찾고 있다">
+                    예시 3
+                </button>
+            </div>
+            
+            
+            <div class="input-area">
+                <textarea 
+                    id="user-input" 
+                    placeholder="또는 직접 텍스트를 입력하세요..."
+                    rows="4"
+                ></textarea>
+                
+                <button id="generate-btn" class="primary-btn" disabled>
+                    🎨 이미지 생성
+                </button>
+                
+                <button id="regenerate-btn" class="secondary-btn" style="display: none;">
+                    🔄 재생성
+                </button>
+            </div>
+
+            
+            <div id="status-area" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p id="status-text">이미지 생성 중...</p>
+            </div>
+
+            
+            <div id="result-area" style="display: none;">
+                <img id="result-image" alt="생성된 이미지">
+                <div class="result-info">
+                    <p>품질: <span id="quality-score">-</span></p>
+                    <p>생성 시간: <span id="generation-time">-</span>초</p>
+                </div>
+                <button id="download-btn" class="download-btn">
+                    💾 이미지 다운로드
+                </button>
+                
+                
+                <details>
+                    <summary>🔍 디버그 정보</summary>
+                    <pre id="debug-info">-</pre>
+                </details>
+            </div>
+        </div> -->
+        
+        <!-- 챗봇 섹션 -->
+        <div class="chatbot-section">
+            <h2>💬 AI 대화</h2>
+            
+            <!-- 진도 표시 -->
+            <div class="progress-display">
+                <p>📖 읽은 페이지: <span id="saved-progress">0</span> / <span id="total-progress">0</span></p>
+            </div>
+            
+            <!-- 모드 선택 탭 -->
+            <div class="chat-mode-tabs">
+                <button class="tab-btn active" data-mode="qa">📖 일반 Q&A</button>
+                <button class="tab-btn" data-mode="character">💬 캐릭터 대화</button>
+                <button class="tab-btn" data-mode="image">🎨 이미지 생성</button>
+            </div>
+            
+            <!-- Q&A 모드 -->
+            <div id="qa-mode" class="chat-mode-content active">
+                <div class="mode-description">
+                    <p>책 내용에 대해 객관적인 질문을 할 수 있습니다.</p>
+                </div>
+                
+                <!-- 대화 창 -->
+                <div id="qa-messages" class="chat-messages">
+                    <div class="chat-placeholder">
+                        <p>💡 책 내용에 대해 질문해보세요!</p>
+                        <p style="font-size: 12px; color: #666;">
+                            예: "사이클론이 뭐야?", "도로시는 왜 오즈로 갔어?"
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- 입력 영역 -->
+                <div class="chat-input-area">
+                    <textarea 
+                        id="qa-input" 
+                        placeholder="질문을 입력하세요..."
+                        rows="3"
+                    ></textarea>
+                    <button id="qa-send-btn" class="chat-btn">
+                        📤 질문하기
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 캐릭터 대화 모드 -->
+            <div id="character-mode" class="chat-mode-content">
+                <div class="mode-description">
+                    <p>캐릭터와 1:1 대화를 나눌 수 있습니다.</p>
+                    <p style="font-size: 11px; color: #888;">
+                        ⚠️ 캐릭터는 현재 읽은 페이지까지만 기억합니다.
+                    </p>
+                </div>
+                
+                <!-- 캐릭터 선택 -->
+                <div class="character-select-area">
+                    <label for="character-select">대화 상대:</label>
+                    <select id="character-select">
+                        <option value="">캐릭터 로딩 중...</option>
+                    </select>
+                </div>
+
+                <!-- 대화 창 -->
+                <div id="character-messages" class="chat-messages">
+                    <div class="chat-placeholder">
+                        <p>💬 캐릭터를 선택하고 대화를 시작하세요!</p>
+                        <p style="font-size: 12px; color: #666;">
+                            현재 페이지까지 등장한 캐릭터와 대화할 수 있습니다.
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- 입력 영역 -->
+                <div class="chat-input-area">
+                    <textarea 
+                        id="character-input" 
+                        placeholder="캐릭터에게 말 걸기..."
+                        rows="3"
+                    ></textarea>
+                    <div class="chat-btn-group">
+                        <button id="character-send-btn" class="chat-btn">💬 전송</button>
+                        <button id="clear-history-btn" class="clear-btn" title="대화 초기화">🗑️</button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- 이미지 생성 모드 -->
+            <div id="image-mode" class="chat-mode-content">
+                <div class="mode-description">
+                    <p>선택한 텍스트로 동화책 스타일 삽화를 생성합니다.</p>
+                </div>
+                
+                <!-- 빠른 예시 버튼 -->
+                <div class="quick-examples">
+                    <button class="example-btn" data-text="도로시가 토토와 함께 노란 벽돌길을 걷는다">
+                        예시 1
+                    </button>
+                    <button class="example-btn" data-text="허수아비가 뇌를 갖고 싶어한다">
+                        예시 2
+                    </button>
+                    <button class="example-btn" data-text="양철 나무꾼이 심장을 찾고 있다">
+                        예시 3
+                    </button>
+                </div>
+                
+                <!-- 선택된 텍스트 표시 -->
+                <div id="selected-text-display">
+                    <h3>선택된 텍스트</h3>
+                    <p id="selected-text">책에서 텍스트를 드래그하여 선택하세요</p>
+                </div>
+                
+                <!-- 입력 영역 -->
+                <div class="input-area">
+                    <textarea 
+                        id="user-input" 
+                        placeholder="또는 직접 텍스트를 입력하세요..."
+                        rows="4"
+                    ></textarea>
+                    
+                    <button id="generate-btn" class="primary-btn" disabled>
+                        🎨 이미지 생성
+                    </button>
+                    
+                    <button id="regenerate-btn" class="secondary-btn" style="display: none;">
+                        🔄 재생성
+                    </button>
+                </div>
+
+                <!-- 상태 표시 -->
+                <div id="status-area" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p id="status-text">이미지 생성 중...</p>
+                </div>
+
+                <!-- 결과 이미지 -->
+                <div id="result-area" style="display: none;">
+                    <img id="result-image" alt="생성된 이미지">
+                    <div class="result-info">
+                        <p>품질: <span id="quality-score">-</span></p>
+                        <p>생성 시간: <span id="generation-time">-</span>초</p>
+                    </div>
+                    <button id="download-btn" class="download-btn">
+                        💾 이미지 다운로드
+                    </button>
+                    
+                    <!-- 디버그 정보 -->
+                    <details>
+                        <summary>🔍 디버그 정보</summary>
+                        <pre id="debug-info">-</pre>
+                    </details>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- 책 선택 모달 -->
+    <div id="book-select-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>📚 책 선택</h2>
+            <div id="book-list" class="book-list">
+                <p>로딩 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
