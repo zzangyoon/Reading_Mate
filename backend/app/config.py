@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     
     # Tavily
     TAVILY_API_KEY: str = ""
+
+    # LangSmith
+    LANGCHAIN_TRACING_V2: str = "false"
+    LANGCHAIN_API_KEY: str = ""
+    LANGCHAIN_PROJECT: str = ""
     
     # RAG Settings
     COLLECTION_NAME: str = "BOOK_CHUNKS"
