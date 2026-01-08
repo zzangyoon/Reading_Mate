@@ -1,18 +1,22 @@
-# uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8003
+# uvicorn backend.app.main:app --host 0.0.0.0 --port 8003
+# front : cd fronted > python -m http.server 8080
 """
 FastAPI 메인 애플리케이션
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 load_dotenv()
 
 from backend.app.core.system import get_assistant_system
+from backend.app.core.database import DatabaseManager
 from backend.app.models.request import RAGRequest
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
 from fastapi.responses import FileResponse
 from backend.app.api.router import api_router
+from sqlalchemy import text
 import yaml
 
 from vector_search import VectorSearchEngine
@@ -23,6 +27,13 @@ from contextlib import asynccontextmanager
 
 services = {}
 sessions = {}
+origins = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080"
+
+]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -74,6 +85,14 @@ app = FastAPI(
 )
 
 app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # 허용할 출처
+    allow_credentials=True,
+    allow_methods=["*"],        # 모든 HTTP 메서드 허용
+    allow_headers=["*"],        # 모든 헤더 허용
+)
 
 @app.get("/connection_check")
 async def connection_check():
@@ -151,3 +170,67 @@ async def get_image(filename: str):
 #     answer = assistant.ask("그 집을 사이클론의 한가운데로 끌어올렸다", "여기서 사이클론이 의미하는게 뭐야?")
 #     print(answer)
 #     return {"status" : "ok", "answer" : answer}
+
+
+# BOOKS = {
+#     "oz": [
+#         {"chunk_id": 1, "text": "도로시가 회오리바람에 휘말려 오즈의 나라로 이동했다.", "page": 1},
+#         {"chunk_id": 2, "text": "그녀는 허수아비, 양철 나무꾼, 사자를 만난다.", "page": 2},
+#         {"chunk_id": 3, "text": "에메랄드 시티로 향하며 마녀를 물리친다.", "page": 3},
+#     ]
+# }
+
+@app.get("/book/{book_id}/chunks")
+async def get_chunks(book_id: int):
+    """책의 총 청크 개수 조회"""
+    try:
+        db_manager = DatabaseManager()
+        
+        async with db_manager.async_engine.connect() as conn:
+            result = await conn.execute(
+                text("SELECT COUNT(*) FROM langchain_pg_embedding WHERE (cmetadata->>'book_id')::int = :book_id"),
+                {"book_id": book_id}
+            )
+            count = result.scalar()
+            
+            return {"total_chunks": count}
+            
+    except Exception as e:
+        print(f"청크 개수 조회 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/book/{book_id}/chunk/{chunk_id}")
+async def get_chunk(book_id: int, chunk_id: int):
+    """특정 청크 조회"""
+    try:
+        db_manager = DatabaseManager()
+        
+        async with db_manager.async_engine.connect() as conn:
+            # chunk_index로 조회 (chunk_id는 1부터 시작하므로 -1)
+            result = await conn.execute(
+                text("""
+                    SELECT document, cmetadata 
+                    FROM langchain_pg_embedding 
+                    WHERE (cmetadata->>'book_id')::int = :book_id 
+                    AND (cmetadata->>'chunk_index')::int = :chunk_index
+                """),
+                {"book_id": book_id, "chunk_index": chunk_id - 1}
+            )
+            row = result.fetchone()
+            
+            if not row:
+                raise HTTPException(status_code=404, detail="청크를 찾을 수 없습니다.")
+            
+            return {
+                "chunk": {
+                    "text": row[0],
+                    "metadata": row[1]
+                },
+                "page": chunk_id
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"청크 조회 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
