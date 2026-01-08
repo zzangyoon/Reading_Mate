@@ -10,6 +10,5 @@ __pycache__/
 # test_File
 backend/app/main copy.py
 backend/app/core/system copy.py
-data/
 temp/
 generated_images/
