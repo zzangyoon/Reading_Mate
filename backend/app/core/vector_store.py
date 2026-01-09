@@ -1,6 +1,7 @@
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import PGVector
 from backend.app.core.database import DatabaseManager
+from backend.app.core.reranker import get_reranker
 from backend.app.config import settings
 import asyncio
 from typing import List
@@ -32,7 +33,8 @@ class VectorStoreManager:
         self,
         selected_passage: str,
         user_question: str,
-        k: int = 5
+        k: int = 5,
+        use_rerank: bool = True  # 추가
     ) -> dict:
         """하이브리드 검색 (구절 + 질문)"""
         selected_passage = selected_passage.strip()
@@ -41,17 +43,26 @@ class VectorStoreManager:
         if not selected_passage and not user_question:
             raise ValueError("검색할 구절 또는 질문이 필요합니다.")
 
-        print("hybrid_search ::: ")
+        print(f"\n{'='*50}")
+        print(f"[Hybrid Search] 질문: {user_question}")
+        print(f"[Hybrid Search] 구절: {selected_passage[:50]}...")
+
+        candidate_k = k * 3 if use_rerank else k
 
         tasks = []
         if selected_passage:
-            tasks.append(self.vector_store.asimilarity_search(selected_passage, k=k))
+            tasks.append(self.vector_store.asimilarity_search(selected_passage, k=candidate_k))
         
         if user_question:
-            tasks.append(self.vector_store.asimilarity_search(user_question, k=k))
+            tasks.append(self.vector_store.asimilarity_search(user_question, k=candidate_k))
         
         # asyncio.gather: 여러 비동기 작업을 병렬로 실행
         results: List[List[Document]] = await asyncio.gather(*tasks)
+
+        # 디버그 추가
+        print(f"[DEBUG] candidate_k={candidate_k}")
+        print(f"[DEBUG] passage 검색 결과: {len(results[0]) if len(results) > 0 else 0}개")
+        print(f"[DEBUG] question 검색 결과: {len(results[1]) if len(results) > 1 else 0}개")
 
         # 결과 합치기
         all_docs = []
@@ -67,7 +78,26 @@ class VectorStoreManager:
                 seen_contents.add(doc.page_content)
                 unique_docs.append(doc)
         
-        selected_docs = unique_docs[:k]
+        # selected_docs = unique_docs[:k]
+
+        # Rerank 적용
+        if use_rerank and len(unique_docs) > k:
+            print(f"\n[Before Rerank] 후보 {len(unique_docs)}개")
+            for i, doc in enumerate(unique_docs[:3]):
+                page = doc.metadata.get('chunk_index', '?')
+                print(f"  {i+1}. (p.{page}) {doc.page_content[:40]}...")
+            
+            reranker = get_reranker()
+            query = f"{selected_passage} {user_question}".strip()
+            selected_docs = reranker.rerank(query, unique_docs, top_k=k)
+            
+            print(f"\n[After Rerank] 상위 {len(selected_docs)}개")
+            for i, doc in enumerate(selected_docs):
+                page = doc.metadata.get('chunk_index', '?')
+                print(f"  {i+1}. (p.{page}) {doc.page_content[:40]}...")
+            print(f"{'='*50}\n")
+        else:
+            selected_docs = unique_docs[:k]
         
         if not selected_docs:
             return {
