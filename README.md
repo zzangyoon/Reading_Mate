@@ -1,10 +1,17 @@
 # Reading Mate
 
-LangGraph 기반 Multi-Agent RAG 시스템으로 구현한 AI 독서 도우미
+자가 보정(Self-Correction) RAG와 맥락 인지형 캐릭터 채팅을 통해 스포일러 없는 독서 경험을 제공하는 독서 어시스턴트
 
 ## 프로젝트 소개
 
 독서 중 발생하는 궁금증을 즉시 해결하고, 책 속 캐릭터와 대화하며 몰입감을 높이는 AI 어시스턴트입니다.
+
+<img 
+    src="https://github.com/user-attachments/assets/053b7804-1bf4-43a0-8dd3-38e8999a681c" 
+    alt="스크린샷 2026-01-16 155955" 
+    width="700" 
+    style="border: 3px solid #4CAF50; border-radius: 10px; box-shadow: 3px 3px 8px rgba(0,0,0,0.3);" 
+/>
 
 ### 해결하고자 한 문제
 
@@ -15,27 +22,12 @@ LangGraph 기반 Multi-Agent RAG 시스템으로 구현한 AI 독서 도우미
 | 낮은 몰입감 | 캐릭터 페르소나 대화 |
 
 ## 시스템 아키텍처
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend                              │
-│                  (Vanilla JS + HTML/CSS)                    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     FastAPI Backend                          │
-├──────────────────┬──────────────────┬───────────────────────┤
-│   Q&A Agent      │  Character Agent │  Image Agent          │
-│   (LangGraph)    │  (Persona Chat)  │  (ComfyUI)            │
-└──────────────────┴──────────────────┴───────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  PostgreSQL + pgvector │ OpenAI │ Tavily │ LangSmith        │
-└─────────────────────────────────────────────────────────────┘
-```
-
+<img 
+    src="https://github.com/user-attachments/assets/0c2d6282-5641-403b-aa6c-968d0c622eb0" 
+    alt="스크린샷 2026-01-12 205113" 
+    width="700" 
+    style="border: 3px solid #4CAF50;" 
+/>
 ## 주요 기능
 
 ### 1. Q&A Agent
